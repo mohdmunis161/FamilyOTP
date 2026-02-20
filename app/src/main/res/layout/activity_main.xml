@@ -22,4 +22,24 @@
         android:text="Grant Permissions"
         android:visibility="gone"/>
 
+    <Button
+        android:id="@+id/btn_fetch_otp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Refresh OTP"
+        android:layout_marginTop="24dp"
+        android:visibility="gone"/>
+
+    <TextView
+        android:id="@+id/otp_display_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textAlignment="center"
+        android:layout_marginTop="32dp"
+        android:padding="16dp"
+        android:background="#F5F5F5"
+        android:visibility="gone"/>
+
 </LinearLayout>

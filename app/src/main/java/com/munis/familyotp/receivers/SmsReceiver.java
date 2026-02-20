@@ -6,7 +6,9 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.telephony.SmsMessage;
 import android.util.Log;
-import android.widget.Toast;
+
+import com.munis.familyotp.network.SheetService;
+import com.munis.familyotp.security.KeyManager;
 
 public class SmsReceiver extends BroadcastReceiver {
 
@@ -20,13 +22,11 @@ public class SmsReceiver extends BroadcastReceiver {
         if (intent.getAction() != null && intent.getAction().equals(SMS_RECEIVED)) {
             Bundle bundle = intent.getExtras();
             if (bundle != null) {
-                // PDU = Protocol Data Unit (standard format for SMS)
                 Object[] pdus = (Object[]) bundle.get("pdus");
                 if (pdus != null) {
                     for (Object pdu : pdus) {
                         try {
                             SmsMessage smsMessage;
-                            // Checking version for PDU format
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                                 String format = bundle.getString("format");
                                 smsMessage = SmsMessage.createFromPdu((byte[]) pdu, format);
@@ -36,21 +36,45 @@ public class SmsReceiver extends BroadcastReceiver {
 
                             String sender = smsMessage.getDisplayOriginatingAddress();
                             String messageBody = smsMessage.getMessageBody();
-                            long timestamp = smsMessage.getTimestampMillis();
 
-                            Log.e(TAG, "SMS DECODED SUCCESS: " + sender + " -> " + messageBody);
+                            Log.e(TAG, "SMS from: " + sender + " -> " + messageBody);
 
-                            // FORCE TOAST ON MAIN THREAD
-                            Toast.makeText(context, "OTP DETECTED:\n" + messageBody, Toast.LENGTH_LONG).show();
+                            KeyManager keyManager = new KeyManager(context);
+                            if (!keyManager.hasKeys()) {
+                                Log.e(TAG, "No keys imported yet, skipping encryption");
+                                return;
+                            }
 
-                            // TODO: Trigger WorkManager to encrypt and upload
+                            String encrypted = keyManager.encrypt(messageBody);
+                            if (encrypted == null) {
+                                Log.e(TAG, "Encryption failed");
+                                return;
+                            }
+
+                            Log.e(TAG,
+                                    "Encrypted: " + encrypted.substring(0, Math.min(50, encrypted.length())) + "...");
+
+                            String sheetUrl = keyManager.getSheetUrl();
+                            if (sheetUrl.isEmpty()) {
+                                Log.e(TAG, "No sheet URL configured, skipping upload");
+                                return;
+                            }
+
+                            String userName = keyManager.getUserName();
+
+                            new Thread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    SheetService sheetService = new SheetService(sheetUrl);
+                                    boolean success = sheetService.postOtp(sender, userName, encrypted);
+                                    Log.e(TAG, "Upload " + (success ? "SUCCESS" : "FAILED"));
+                                }
+                            }).start();
 
                         } catch (Exception e) {
-                            Log.e(TAG, "Error parsing SMS", e);
+                            Log.e(TAG, "Error processing SMS", e);
                         }
                     }
-                } else {
-                    Log.e(TAG, "Bundle has no PDUs!");
                 }
             }
         }
